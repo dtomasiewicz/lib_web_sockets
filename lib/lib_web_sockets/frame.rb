@@ -12,19 +12,19 @@ module LibWebSockets
       :continue, # 0x0
       :text,     # 0x1
       :binary,   # 0x2
-      :reserved, # 0x3
-      :reserved, # 0x4
-      :reserved, # 0x5
-      :reserved, # 0x6
-      :reserved, # 0x7
+      :rsv_nc_1, # 0x3
+      :rsv_nc_2, # 0x4
+      :rsv_nc_3, # 0x5
+      :rsv_nc_4, # 0x6
+      :rsv_nc_5, # 0x7
       :close,    # 0x8
       :ping,     # 0x9
       :pong,     # 0xA
-      :reserved, # 0xB
-      :reserved, # 0xC
-      :reserved, # 0xD
-      :reserved, # 0xE
-      :reserved, # 0xF
+      :rsv_c_1,  # 0xB
+      :rsv_c_2,  # 0xC
+      :rsv_c_3,  # 0xD
+      :rsv_c_4,  # 0xE
+      :rsv_c_5,  # 0xF
     ]
 
     attr_accessor :op, :payload, :fin, :rsv1, :rsv2, :rsv3, :masking_key

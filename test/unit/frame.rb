@@ -2,11 +2,13 @@ require 'lib_web_sockets'
 require 'minitest/autorun'
 
 # tests the frame structure described in section 5.2
-# TODO invalid frame parse tests
-#   - payload shorter than PL (at end of data)
-#     should raise an error
-#   - payload longer than PL
-#     should return remainder of length = difference (no error)
+# TODO
+#   invalid frame parse tests
+#     - payload shorter than PL (at end of data)
+#       should raise an error
+#     - payload longer than PL
+#       should return remainder of length = difference (no error)
+#   to_s tests
 class FrameTest < MiniTest::Unit::TestCase
 
   def setup
@@ -39,7 +41,7 @@ class FrameTest < MiniTest::Unit::TestCase
     # MASKING KEY = "\xFC\x9A\x54\x02" (4237972482)
     # PAYLOAD = "ABC" ("\x41\x42\x43")
     # MASKED PAYLOAD = "\xBD\xD8\x17"
-    @v_noepl_mask = [0x071A, "\xFC\x9A\x54\x02", bin("\xBD\xD8\x17")].pack 'nA4A3'
+    @v_noepl_mask = [0x072A, "\xFC\x9A\x54\x02", bin("\xBD\xD8\x17")].pack 'nA4A3'
 
     # VALID FRAME - 16-bit EPL, no mask
     #         54   3  21
@@ -78,51 +80,100 @@ class FrameTest < MiniTest::Unit::TestCase
 
 
   def test_parse_noepl_nomask
-    frame, remainder = LibWebSockets::Frame.parse @v_noepl_nomask
+    data = @v_noepl_nomask.dup
+    frame, remainder = LibWebSockets::Frame.parse data
 
-    assert_equal 0, remainder.length
-    assert_binary frame.payload
-    assert_binary remainder
-    assert_equal bin("ABC"), frame.payload
-    assert !frame.masked?
-    assert_nil frame.masking_key
+    # ensure data was not modified by the call
+    assert_equal @v_noepl_nomask, data
+
+    parse_tests frame, remainder,
+      :fin? => true,
+      :rsv => [false, false, false],
+      :op => :text,
+      :masking_key => nil,
+      :payload => bin("ABC")
   end
 
 
   def test_parse_noepl_mask
-    frame, remainder = LibWebSockets::Frame.parse @v_noepl_mask
+    data = @v_noepl_mask.dup
+    frame, remainder = LibWebSockets::Frame.parse data
 
-    assert_equal 0, remainder.length
-    assert_binary frame.payload
-    assert_binary remainder
-    assert_equal bin("ABC"), frame.payload
-    assert frame.masked?
-    assert_equal "\xFC\x9A\x54\x02", frame.masking_key
+    # ensure data was not modified by the call
+    assert_equal @v_noepl_mask, data
+
+    parse_tests frame, remainder,
+      :fin? => false,
+      :rsv => [true, false, true],
+      :op => :binary,
+      :masking_key => "\xFC\x9A\x54\x02",
+      :payload => bin("ABC"),
   end
 
   def test_parse_epl16_nomask
-    frame, remainder = LibWebSockets::Frame.parse @v_epl16_nomask
+    data = @v_epl16_nomask.dup
+    frame, remainder = LibWebSockets::Frame.parse data
 
-    assert_equal 0, remainder.length
-    assert_binary frame.payload
-    assert_binary remainder
-    assert_equal bin("ABC")*14011, frame.payload
-    assert !frame.masked?
-    assert_nil frame.masking_key
+    # ensure data was not modified by the call
+    assert_equal @v_epl16_nomask, data
+
+    parse_tests frame, remainder,
+      :fin? => false,
+      :rsv => [true, false, true],
+      :op => :continue,
+      :masking_key => nil,
+      :payload => bin("ABC")*14011
   end
 
   def test_parse_epl64_mask
-    frame, remainder = LibWebSockets::Frame.parse @v_epl64_mask
+    data = @v_epl64_mask.dup
+    frame, remainder = LibWebSockets::Frame.parse data
 
-    assert_equal 0, remainder.length
-    assert_binary frame.payload
-    assert_binary remainder
-    assert_equal bin("BD9:")*24587, frame.payload
-    assert frame.masked?
-    assert_equal "\xA1\xE5\xB9\xDC", frame.masking_key
+    # ensure data was not modified by the call
+    assert_equal @v_epl64_mask, data
+
+    parse_tests frame, remainder,
+      :fin? => true,
+      :rsv => [true, true, false],
+      :op => :close,
+      :masking_key => "\xA1\xE5\xB9\xDC",
+      :payload => bin("BD9:")*24587
   end
 
   private
+
+  def parse_tests(frame, remainder, exps = {})
+    # invariants
+    assert_binary frame.payload
+    assert_binary remainder
+
+    if exps.has_key? :fin?
+      assert_equal !!exps[:fin?], !!frame.fin?
+    end
+
+    if exps.has_key? :rsv
+      assert_equal exps[:rsv], [frame.rsv1, frame.rsv2, frame.rsv3]
+    end
+
+    if exps.has_key? :op
+      assert_equal exps[:op], frame.op
+    end
+
+    if exps.has_key? :masking_key
+      assert_equal exps[:masking_key], frame.masking_key
+      assert_equal !!frame.masked?, !!exps[:masking_key]
+    end
+
+    if exps.has_key? :payload
+      assert_equal exps[:payload], frame.payload
+    end
+
+    if exps.has_key? :remainder
+      assert_equal exps[:remainder], remainder
+    else
+      assert_equal bin(""), remainder
+    end
+  end
 
   def assert_binary(str, msg = nil)
     assert_equal 'ASCII-8BIT', str.encoding.name, msg
