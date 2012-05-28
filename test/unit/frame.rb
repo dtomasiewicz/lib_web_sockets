@@ -80,13 +80,7 @@ class FrameTest < MiniTest::Unit::TestCase
 
 
   def test_parse_noepl_nomask
-    data = @v_noepl_nomask.dup
-    frame, remainder = LibWebSockets::Frame.parse data
-
-    # ensure data was not modified by the call
-    assert_equal @v_noepl_nomask, data
-
-    parse_tests frame, remainder,
+    valid_parse_test @v_noepl_nomask,
       :fin? => true,
       :rsv => [false, false, false],
       :op => :text,
@@ -96,13 +90,7 @@ class FrameTest < MiniTest::Unit::TestCase
 
 
   def test_parse_noepl_mask
-    data = @v_noepl_mask.dup
-    frame, remainder = LibWebSockets::Frame.parse data
-
-    # ensure data was not modified by the call
-    assert_equal @v_noepl_mask, data
-
-    parse_tests frame, remainder,
+    valid_parse_test @v_noepl_mask,
       :fin? => false,
       :rsv => [true, false, true],
       :op => :binary,
@@ -111,13 +99,7 @@ class FrameTest < MiniTest::Unit::TestCase
   end
 
   def test_parse_epl16_nomask
-    data = @v_epl16_nomask.dup
-    frame, remainder = LibWebSockets::Frame.parse data
-
-    # ensure data was not modified by the call
-    assert_equal @v_epl16_nomask, data
-
-    parse_tests frame, remainder,
+    valid_parse_test @v_epl16_nomask,
       :fin? => false,
       :rsv => [true, false, true],
       :op => :continue,
@@ -126,13 +108,7 @@ class FrameTest < MiniTest::Unit::TestCase
   end
 
   def test_parse_epl64_mask
-    data = @v_epl64_mask.dup
-    frame, remainder = LibWebSockets::Frame.parse data
-
-    # ensure data was not modified by the call
-    assert_equal @v_epl64_mask, data
-
-    parse_tests frame, remainder,
+    valid_parse_test @v_epl64_mask,
       :fin? => true,
       :rsv => [true, true, false],
       :op => :close,
@@ -142,8 +118,12 @@ class FrameTest < MiniTest::Unit::TestCase
 
   private
 
-  def parse_tests(frame, remainder, exps = {})
+  def valid_parse_test(data, exps = {})
+    data_cpy = data.dup
+    frame, remainder = LibWebSockets::Frame.parse data_cpy
+
     # invariants
+    assert_equal data, data_cpy # call didn't modify the data
     assert_binary frame.payload
     assert_binary remainder
 
