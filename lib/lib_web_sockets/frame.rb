@@ -27,14 +27,18 @@ module LibWebSockets
       :reserved, # 0xF
     ]
 
-    attr_accessor :op, :payload, :extra
+    attr_accessor :op, :payload, :fin, :rsv1, :rsv2, :rsv3, :masking_key
+    alias_method :fin?, :fin
+    alias_method :masked?, :masking_key
 
+    # payload should be a binary string, even if the op == :text
     def initialize(op, payload = nil, fin = false, extra = {})
-      @op, @payload, @fin, @extra = op, payload.dup, fin, extra.dup
-    end
-
-    def fin?
-      @fin
+      @op, @fin = op, fin
+      @payload = payload.dup if payload
+      @rsv1 = extra[:rsv1]
+      @rsv2 = extra[:rsv2]
+      @rsv3 = extra[:rsv3]
+      @masking_key = extra[:masking_key]
     end
 
     # parses an individual Frame as per section 5.2
@@ -42,12 +46,13 @@ module LibWebSockets
     #   n   uint16 network-endian
     #   N   uint32 network-endian
     #   Q>  uint64 big-endian (= network-endian)
+    #   An  n-byte binary string
     # returns Frame, remaining_data
     def self.parse(data)
       i = 0 # number of bytes read/parsed so far
-      extra = {} # uncommon fields
+      extra = {}
 
-      # FIN, RSV1, RSV2, RSV3, opcode(4), MASK, Payload len(7)
+      # FIN, RSV1, RSV2, RSV3, opcode(4), MASKED, Payload len(7)
       intro = data[i, 2].unpack('n')[0]
       i += 2
 
@@ -56,7 +61,7 @@ module LibWebSockets
       extra[:rsv2] = intro & 4 > 0
       extra[:rsv3] = intro & 8 > 0
       op = OPS[intro >> 4 & 15]
-      mask = intro & 256 > 0
+      masked = intro & 256 > 0
       payload_len = intro >> 9 & 127
 
       if payload_len > 125
@@ -71,12 +76,13 @@ module LibWebSockets
         end
       end
 
-      if mask
-        extra[:masking_key] = data[i, 4].unpack('N')[0]
+      if masked
+        extra[:masking_key] = data[i, 4].unpack('A4')[0]
         i += 4
       end
 
       payload = data[i, payload_len]
+      payload = mask payload, extra[:masking_key] if masked
       i += payload_len
 
       return new(op, payload, fin, extra), data[i..-1]
@@ -96,11 +102,11 @@ module LibWebSockets
       data, format = [], ''
 
       intro = @fin ? 1 : 0
-      intro |= 2 if @extra[:rsv1]
-      intro |= 4 if @extra[:rsv2]
-      intro |= 8 if @extra[:rsv3]
+      intro |= 2 if @rsv1
+      intro |= 4 if @rsv2
+      intro |= 8 if @rsv3
       intro |= OPS.index(@op) << 4
-      intro |= 256 if @extra[:masking_key]
+      intro |= 256 if @masking_key
     
       epl = nil
       if @payload
@@ -127,13 +133,13 @@ module LibWebSockets
         format << epl_format
       end
 
-      if @extra[:masking_key]
-        data << @extra[:masking_key]
-        format << 'N'
+      if @masking_key
+        data << @masking_key
+        format << 'A4'
       end
 
       if @payload
-        data << @payload
+        data << (masked? ? mask(@payload, @masking_key) : @payload)
         format << "A#{@payload.length}"
       end
 
@@ -169,12 +175,27 @@ module LibWebSockets
       end
     end
 
-    def continue?; type? :continue; end
-    def text?; type? :text; end
-    def binary?; type? :binary; end
-    def close?; type? :close; end
-    def ping?; type? :ping; end
-    def pong?; type? :pong; end
+    def continue?; op? :continue; end
+    def text?; op? :text; end
+    def binary?; op? :binary; end
+    def close?; op? :close; end
+    def ping?; op? :ping; end
+    def pong?; op? :pong; end
+
+    private
+
+    def self.mask!(data, key)
+      masks = key.bytes.to_a
+      (0...data.length).each do |i|
+        # must use getbyte/setbyte; [] and []= sometimes change the encoding
+        data.setbyte i, data.getbyte(i) ^ masks[i%4]
+      end
+      data
+    end
+
+    def self.mask(data, key)
+      mask! data.dup, key
+    end
 
   end
 
