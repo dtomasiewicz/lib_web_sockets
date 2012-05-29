@@ -7,7 +7,7 @@ module LibWebSockets
 
       def initialize(status = '200 OK', *msg_args)
         super(*msg_args)
-        @status = status
+        @status = status.frozen? ? status : status.dup
       end
 
       def to_s

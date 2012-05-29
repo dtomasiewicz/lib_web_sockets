@@ -1,6 +1,6 @@
 module LibWebSockets
 
-	class ClientConnection < Connection
+  class ClientConnection < Connection
 
     def opening_recv_data(data)
       # TODO

@@ -1,6 +1,7 @@
 module LibWebSockets
   module HTTP
 
+    # TODO handle character sets/encodings correctly
     class Message
 
       CRLF = "\r\n"
@@ -9,9 +10,13 @@ module LibWebSockets
 
       attr_accessor :headers, :body
 
-      def initialize(headers = {}, body = nil)
-        @headers = headers.kind_of?(Headers) ? headers.dup : Headers[headers]
-        @body = body
+      def initialize(body = nil, headers = {})
+        @headers = Headers[headers]
+        if @body = body
+          @body = @body.dup unless @body.frozen?
+          @headers['Content-Length'] ||= @body.bytesize
+          @headers['Content-Type'] ||= "text/html; charset=#{@body.encoding.name}"
+        end
       end
 
       def self.parse(str)
@@ -41,12 +46,12 @@ module LibWebSockets
           name, value = line.split(':', 2)
           headers.add name, strip_lws(value)
         end
-        return headers, lines.join(CRLF)
+        return lines.join(CRLF), headers
       end
 
       # strips leading and trailing linear white-space (LWS; tabs/spaces)
       def self.strip_lws(str)
-        str.dup.sub!(/^[ \t]*/, '').sub! /[ \t]*$/, ''
+        str.sub(/^[ \t]*/, '').sub! /[ \t]*$/, ''
       end
 
     end

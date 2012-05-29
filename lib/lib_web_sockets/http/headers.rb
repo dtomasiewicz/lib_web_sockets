@@ -11,15 +11,14 @@ module LibWebSockets
       end
 
       def self.[](headers)
-        h = new
-        if headers.kind_of? Hash
-          headers.each_pair {|n,v| h.add n, v}
-        elsif headers.kind_of? Array
-          headers.each {|(n,v)| h.add n, v}
-        el
+        case headers
+        when Headers
+          headers.dup
+        when Hash, Arry
+          headers.each_with_object(new) {|h,(n,v)| h[n]=v}
+        else
           raise TypeError, "can't convert #{headers} into #{name}"
         end
-        h
       end
 
       def add(name, value)
@@ -27,6 +26,7 @@ module LibWebSockets
         @elements << [name, value]
         key = name.downcase
         @values[key] = @values[key] ? @values[key]+","+value : value
+        self
       end
 
       def get(name)
@@ -38,6 +38,7 @@ module LibWebSockets
         key = name.downcase
         @elements.reject! {|(n, v)| n.downcase == key}
         add name, value
+        value
       end
       alias_method :[]=, :set
 

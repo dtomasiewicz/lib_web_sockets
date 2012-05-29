@@ -116,6 +116,10 @@ module LibWebSockets
         when :close
           send_close_frame if open?
           closed!
+        when :ping
+          # TODO
+        when :pong
+          # TODO
         else
           raise BadFrameOp, "unsupported/unimplemented frame op: #{frame.op}"
         end

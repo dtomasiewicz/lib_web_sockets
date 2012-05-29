@@ -32,9 +32,9 @@ module LibWebSockets
     alias_method :masked?, :masking_key
 
     # payload should be a binary string, even if the op == :text
-    def initialize(op, payload = nil, fin = false, extra = {})
+    def initialize(op, payload = nil, fin = true, extra = {})
       @op, @fin = op, fin
-      @payload = payload.dup if payload
+      @payload = payload.dup if payload && !payload.frozen?
       @rsv1 = extra[:rsv1]
       @rsv2 = extra[:rsv2]
       @rsv3 = extra[:rsv3]
@@ -120,11 +120,9 @@ module LibWebSockets
           epl, payload_len = payload_len, 126
           epl_format = 'n'
         end
-      else
-        payload_len = 0
+        intro |= payload_len << 9
       end
 
-      intro |= payload_len << 9
       data << intro
       format << 'n'
 
@@ -139,7 +137,7 @@ module LibWebSockets
       end
 
       if @payload
-        data << (masked? ? mask(@payload, @masking_key) : @payload)
+        data << (@masking_key ? self.class.mask(@payload, @masking_key) : @payload)
         format << "A#{@payload.length}"
       end
 
@@ -152,7 +150,7 @@ module LibWebSockets
     # frame_size is the maximum byte size for each individual frame.
     #   must be in [1, MAX_UINT64]
     def self.for_message(type, message, frame_size = MAX_UINT64)
-      raise InvalidFrameSize unless (1..MAX_UINT64).include? frame_size
+      raise InvalidFrameSize unless (0..MAX_UINT64).include? frame_size
 
       framed = 0 # length of already framed portion
       frames = []
@@ -165,6 +163,10 @@ module LibWebSockets
         frames << new(op, payload, message.length == framed)
       end
       frames
+    end
+
+    def control?
+      OPS.index(@op) > 0x7
     end
 
     def op?(test)

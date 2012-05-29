@@ -8,79 +8,26 @@ require 'minitest/autorun'
 #       should raise an error
 #     - payload longer than PL
 #       should return remainder of length = difference (no error)
-#   to_s tests
 class FrameTest < MiniTest::Unit::TestCase
 
-  def setup
-
-    # VALID FRAME - no EPL, no mask
-    #         54   3  21
-    #   0000011000010001
-    #        x06     x11
-    #
-    #   (1) FIN = 1
-    #   (2) RSV 321 = 000
-    #   (3) OPCODE = 0001 (text)
-    #   (4) MASK = 0
-    #   (5) PAYLOAD LEN = 0000011 (3)
-    # 
-    # PAYLOAD = "ABC"
-    @v_noepl_nomask = [0x0611, bin("ABC")].pack 'nA3'
-
-    # VALID FRAME - no EPL, with mask
-    #         54   3  21
-    #   0000011100101010
-    #        x07     x2A
-    #
-    #   (1) FIN = 0
-    #   (2) RSV 321 = 101
-    #   (3) OPCODE = 0010 (binary)
-    #   (4) MASK = 1
-    #   (5) PAYLOAD LEN = 0000011 (3)
-    # 
-    # MASKING KEY = "\xFC\x9A\x54\x02" (4237972482)
-    # PAYLOAD = "ABC" ("\x41\x42\x43")
-    # MASKED PAYLOAD = "\xBD\xD8\x17"
-    @v_noepl_mask = [0x072A, "\xFC\x9A\x54\x02", bin("\xBD\xD8\x17")].pack 'nA4A3'
-
-    # VALID FRAME - 16-bit EPL, no mask
-    #         54   3  21
-    #   1111110000001010
-    #        xFC     x0A
-    #
-    #   (1) FIN = 0
-    #   (2) RSV 321 = 101
-    #   (3) OPCODE = 0000 (continue)
-    #   (4) MASK = 0
-    #   (5) PAYLOAD LEN = 1111110 (126)
-    # 
-    # EXTENDED PAYLOAD LENGTH = 42033
-    # PAYLOAD = "ABC" * 14011
-    @v_epl16_nomask = [0xFC0A, 42033, bin("ABC")*14011].pack 'nnA42033'
-
-    # VALID FRAME - 64-bit EPL, with mask
-    #         54   3  21
-    #   1111111110000111
-    #        xFF     x87
-    #
-    #   (1) FIN = 1
-    #   (2) RSV 321 = 011
-    #   (3) OPCODE = 1000 (close)
-    #   (4) MASK = 1
-    #   (5) PAYLOAD LEN = 1111111 (127)
-    # 
-    # EXTENDED PAYLOAD LENGTH = 98348
-    # MASKING KEY = "\xA1\xE5\xB9\xDC" (2716187100)
-    # PAYLOAD = "BD9:" ("\x42\x44\x39\x3A") * 24587
-    # MASKED PAYLOAD = "\xE3\xA1\x80\xE6" * 24587
-    @v_epl64_mask = [0xFF87, 98348, "\xA1\xE5\xB9\xDC",
-      bin("\xE3\xA1\x80\xE6")*24587].pack 'nQ>A4A98348'
-
+  # VALID FRAME - no EPL, no mask
+  #         54   3  21
+  #   0000011000010001
+  #        x06     x11
+  #
+  #   (1) FIN = 1
+  #   (2) RSV 321 = 000
+  #   (3) OPCODE = 0001 (text)
+  #   (4) MASK = 0
+  #   (5) PAYLOAD LEN = 0000011 (3)
+  # 
+  # PAYLOAD = "ABC"
+  def v_noepl_nomask
+    [0x0611, bin("ABC")].pack 'nA3'
   end
 
-
-  def test_parse_noepl_nomask
-    valid_parse_test @v_noepl_nomask,
+  def test_parse_v_noepl_nomask
+    fw_test_parse v_noepl_nomask,
       :fin? => true,
       :rsv => [false, false, false],
       :op => :text,
@@ -88,18 +35,70 @@ class FrameTest < MiniTest::Unit::TestCase
       :payload => bin("ABC")
   end
 
+  def test_to_s_v_noepl_nomask
+    fw_test_to_s v_noepl_nomask,
+      :text,
+      bin("ABC"),
+      true
+  end
 
-  def test_parse_noepl_mask
-    valid_parse_test @v_noepl_mask,
+  # VALID FRAME - no EPL, with mask
+  #         54   3  21
+  #   0000011100101010
+  #        x07     x2A
+  #
+  #   (1) FIN = 0
+  #   (2) RSV 321 = 101
+  #   (3) OPCODE = 0010 (binary)
+  #   (4) MASK = 1
+  #   (5) PAYLOAD LEN = 0000011 (3)
+  # 
+  # MASKING KEY = "\xFC\x9A\x54\x02" (4237972482)
+  # PAYLOAD = "ABC" ("\x41\x42\x43")
+  # MASKED PAYLOAD = "\xBD\xD8\x17"
+  def v_noepl_mask
+    [0x072A, bin("\xFC\x9A\x54\x02"), bin("\xBD\xD8\x17")].pack 'nA4A3'
+  end
+
+  def test_parse_v_noepl_mask
+    fw_test_parse v_noepl_mask,
       :fin? => false,
       :rsv => [true, false, true],
       :op => :binary,
-      :masking_key => "\xFC\x9A\x54\x02",
+      :masking_key => bin("\xFC\x9A\x54\x02"),
       :payload => bin("ABC"),
   end
 
-  def test_parse_epl16_nomask
-    valid_parse_test @v_epl16_nomask,
+  def test_to_s_v_noepl_mask
+    fw_test_to_s v_noepl_mask,
+      :binary,
+      bin("ABC"),
+      false,
+      :rsv1 => true,
+      :rsv2 => false,
+      :rsv3 => true,
+      :masking_key => bin("\xFC\x9A\x54\x02")
+  end
+
+  # VALID FRAME - 16-bit EPL, no mask
+  #         54   3  21
+  #   1111110000001010
+  #        xFC     x0A
+  #
+  #   (1) FIN = 0
+  #   (2) RSV 321 = 101
+  #   (3) OPCODE = 0000 (continue)
+  #   (4) MASK = 0
+  #   (5) PAYLOAD LEN = 1111110 (126)
+  # 
+  # EXTENDED PAYLOAD LENGTH = 42033
+  # PAYLOAD = "ABC" * 14011
+  def v_epl16_nomask
+    [0xFC0A, 42033, bin("ABC")*14011].pack 'nnA42033'
+  end
+
+  def test_parse_v_epl16_nomask
+    fw_test_parse v_epl16_nomask,
       :fin? => false,
       :rsv => [true, false, true],
       :op => :continue,
@@ -107,18 +106,61 @@ class FrameTest < MiniTest::Unit::TestCase
       :payload => bin("ABC")*14011
   end
 
-  def test_parse_epl64_mask
-    valid_parse_test @v_epl64_mask,
+  def test_to_s_v_epl16_nomask
+    fw_test_to_s v_epl16_nomask,
+      :continue,
+      bin("ABC")*14011,
+      false,
+      :rsv1 => true,
+      :rsv2 => false,
+      :rsv3 => true
+  end
+
+  # VALID FRAME - 64-bit EPL, with mask
+  #         54   3  21
+  #   1111111110000111
+  #        xFF     x87
+  #
+  #   (1) FIN = 1
+  #   (2) RSV 321 = 011
+  #   (3) OPCODE = 1000 (close)
+  #   (4) MASK = 1
+  #   (5) PAYLOAD LEN = 1111111 (127)
+  # 
+  # EXTENDED PAYLOAD LENGTH = 98348
+  # MASKING KEY = "\xA1\xE5\xB9\xDC" (2716187100)
+  # PAYLOAD = "BD9:" ("\x42\x44\x39\x3A") * 24587
+  # MASKED PAYLOAD = "\xE3\xA1\x80\xE6" * 24587
+  def v_epl64_mask
+    [0xFF87, 98348, bin("\xA1\xE5\xB9\xDC"), bin("\xE3\xA1\x80\xE6")*24587].pack 'nQ>A4A98348'
+  end
+
+  def test_parse_v_epl64_mask
+    fw_test_parse v_epl64_mask,
       :fin? => true,
       :rsv => [true, true, false],
       :op => :close,
-      :masking_key => "\xA1\xE5\xB9\xDC",
+      :masking_key => bin("\xA1\xE5\xB9\xDC"),
       :payload => bin("BD9:")*24587
   end
 
+  def test_to_s_v_epl64_mask
+    fw_test_to_s v_epl64_mask,
+      :close,
+      bin("BD9:")*24587,
+      true,
+      :rsv1 => true,
+      :rsv2 => true,
+      :rsv3 => false,
+      :masking_key => bin("\xA1\xE5\xB9\xDC")
+  end
+
+  # TODO more like above
+
   private
 
-  def valid_parse_test(data, exps = {})
+  # framework for test_parse_* tests
+  def fw_test_parse(data, exps = {})
     data_cpy = data.dup
     frame, remainder = LibWebSockets::Frame.parse data_cpy
 
@@ -155,12 +197,20 @@ class FrameTest < MiniTest::Unit::TestCase
     end
   end
 
+  def fw_test_to_s(expected, op, payload, fin, extra = {})
+    payload_cpy = payload.dup
+    data = LibWebSockets::Frame.new(op, payload_cpy, fin, extra).to_s
+    assert_binary data
+    assert_equal expected, data
+    assert_equal payload, payload_cpy # ensure payload not modified
+  end
+
   def assert_binary(str, msg = nil)
     assert_equal 'ASCII-8BIT', str.encoding.name, msg
   end
 
   def bin(str)
-    str.dup.force_encoding 'ASCII-8BIT'
+    str.encoding.name == 'ASCII-8BIT' ? str : str.dup.force_encoding('ASCII-8BIT')
   end
 
 end
