@@ -192,10 +192,9 @@ module LibWebSockets
     private
 
     def self.mask!(data, key)
-      masks = key.bytes.to_a
       (0...data.length).each do |i|
         # must use getbyte/setbyte; [] and []= sometimes change the encoding
-        data.setbyte i, data.getbyte(i) ^ masks[i%4]
+        data.setbyte i, data.getbyte(i) ^ key.getbyte(i%4)
       end
       data
     end

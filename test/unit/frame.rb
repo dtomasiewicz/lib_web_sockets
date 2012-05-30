@@ -11,19 +11,18 @@ require 'minitest/autorun'
 class FrameTest < MiniTest::Unit::TestCase
 
   # VALID FRAME - no EPL, no mask
-  #         54   3  21
-  #   0000011000010001
-  #        x06     x11
+  #   1000000100000011
+  #        x81     x60
   #
-  #   (1) FIN = 1
-  #   (2) RSV 321 = 000
-  #   (3) OPCODE = 0001 (text)
-  #   (4) MASK = 0
-  #   (5) PAYLOAD LEN = 0000011 (3)
+  #   FIN = 1
+  #   RSV 123 = 000
+  #   OPCODE = 0001 (text)
+  #   MASK = 0
+  #   PAYLOAD LEN = 0000011 (3)
   # 
   # PAYLOAD = "ABC"
   def v_noepl_nomask
-    [0x0611, bin("ABC")].pack 'nA3'
+    [bin("\x81\x03"), bin("ABC")].pack 'A2A3'
   end
 
   def test_parse_v_noepl_nomask
@@ -43,21 +42,20 @@ class FrameTest < MiniTest::Unit::TestCase
   end
 
   # VALID FRAME - no EPL, with mask
-  #         54   3  21
-  #   0000011100101010
-  #        x07     x2A
+  #   0101001010000011
+  #        x52     x83
   #
-  #   (1) FIN = 0
-  #   (2) RSV 321 = 101
-  #   (3) OPCODE = 0010 (binary)
-  #   (4) MASK = 1
-  #   (5) PAYLOAD LEN = 0000011 (3)
+  #   FIN = 0
+  #   RSV 123 = 101
+  #   OPCODE = 0010 (binary)
+  #   MASK = 1
+  #   PAYLOAD LEN = 0000011 (3)
   # 
   # MASKING KEY = "\xFC\x9A\x54\x02" (4237972482)
   # PAYLOAD = "ABC" ("\x41\x42\x43")
   # MASKED PAYLOAD = "\xBD\xD8\x17"
   def v_noepl_mask
-    [0x072A, bin("\xFC\x9A\x54\x02"), bin("\xBD\xD8\x17")].pack 'nA4A3'
+    [bin("\x52\x83"), bin("\xFC\x9A\x54\x02"), bin("\xBD\xD8\x17")].pack 'A2A4A3'
   end
 
   def test_parse_v_noepl_mask
@@ -81,20 +79,19 @@ class FrameTest < MiniTest::Unit::TestCase
   end
 
   # VALID FRAME - 16-bit EPL, no mask
-  #         54   3  21
-  #   1111110000001010
-  #        xFC     x0A
+  #   0101000001111110
+  #        x50     x7E
   #
-  #   (1) FIN = 0
-  #   (2) RSV 321 = 101
-  #   (3) OPCODE = 0000 (continue)
-  #   (4) MASK = 0
-  #   (5) PAYLOAD LEN = 1111110 (126)
+  #   FIN = 0
+  #   RSV 123 = 101
+  #   OPCODE = 0000 (continue)
+  #   MASK = 0
+  #   PAYLOAD LEN = 1111110 (126)
   # 
   # EXTENDED PAYLOAD LENGTH = 42033
   # PAYLOAD = "ABC" * 14011
   def v_epl16_nomask
-    [0xFC0A, 42033, bin("ABC")*14011].pack 'nnA42033'
+    [bin("\x50\x7E"), 42033, bin("ABC")*14011].pack 'A2nA42033'
   end
 
   def test_parse_v_epl16_nomask
@@ -117,22 +114,21 @@ class FrameTest < MiniTest::Unit::TestCase
   end
 
   # VALID FRAME - 64-bit EPL, with mask
-  #         54   3  21
-  #   1111111110000111
-  #        xFF     x87
+  #   1110100011111111
+  #        xE8     xFF
   #
-  #   (1) FIN = 1
-  #   (2) RSV 321 = 011
-  #   (3) OPCODE = 1000 (close)
-  #   (4) MASK = 1
-  #   (5) PAYLOAD LEN = 1111111 (127)
+  #   FIN = 1
+  #   RSV 123 = 110
+  #   OPCODE = 1000 (close)
+  #   MASK = 1
+  #   PAYLOAD LEN = 1111111 (127)
   # 
   # EXTENDED PAYLOAD LENGTH = 98348
   # MASKING KEY = "\xA1\xE5\xB9\xDC" (2716187100)
   # PAYLOAD = "BD9:" ("\x42\x44\x39\x3A") * 24587
   # MASKED PAYLOAD = "\xE3\xA1\x80\xE6" * 24587
   def v_epl64_mask
-    [0xFF87, 98348, bin("\xA1\xE5\xB9\xDC"), bin("\xE3\xA1\x80\xE6")*24587].pack 'nQ>A4A98348'
+    [bin("\xE8\xFF"), 98348, bin("\xA1\xE5\xB9\xDC"), bin("\xE3\xA1\x80\xE6")*24587].pack 'A2Q>A4A98348'
   end
 
   def test_parse_v_epl64_mask
