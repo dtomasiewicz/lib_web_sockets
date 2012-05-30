@@ -6,15 +6,15 @@ module LibWebSockets
     attr_reader :socket
     alias_method :to_io, :socket
 
-    def initialize(socket, conn_class, blocking)
+    def initialize(socket, conn_class, blocking, &on_message)
       @socket = socket
       @conn = conn_class.new &method(:data_sender)
-      @conn.on_close
+      @conn.on_close &method(:close!)
+      @conn.on_message &on_message
     end
 
     def on_close(&block)
       @on_close = block
-      @conn.on_close &method(:close!)
     end
 
     def recv_data

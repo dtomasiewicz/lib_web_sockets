@@ -37,8 +37,8 @@ module LibWebSockets
       @data_sender = data_sender
     end
 
-    def self.[](socket, blocking = false)
-      SocketWrapper.new socket, self, blocking
+    def self.wrap(socket, blocking = false, &on_message)
+      SocketWrapper.new socket, self, blocking, &on_message
     end
 
     def recv_data(data)
@@ -73,6 +73,7 @@ module LibWebSockets
     end
 
     def close
+      raise InvalidState, 'connection is not open' unless state? [:opening, :open]
       send_close_frame
       @state = :closing
     end

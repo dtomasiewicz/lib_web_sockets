@@ -15,7 +15,7 @@ module LibWebSockets
         when Headers
           headers.dup
         when Hash, Arry
-          headers.each_with_object(new) {|h,(n,v)| h[n]=v}
+          headers.each_with_object(new) {|(n,v), h| h[n] = v}
         else
           raise TypeError, "can't convert #{headers} into #{name}"
         end

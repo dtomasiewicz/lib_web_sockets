@@ -52,17 +52,20 @@ module LibWebSockets
       i = 0 # number of bytes read/parsed so far
       extra = {}
 
-      # FIN, RSV1, RSV2, RSV3, opcode(4), MASKED, Payload len(7)
-      intro = data[i, 2].unpack('n')[0]
-      i += 2
+      # FIN, RSV1, RSV2, RSV3, opcode(4)
+      b1 = data[i, 1].unpack('C')[0]
+      i += 1
+      fin = b1 & 128 > 0
+      extra[:rsv1] = b1 & 64 > 0
+      extra[:rsv2] = b1 & 32 > 0
+      extra[:rsv3] = b1 & 16 > 0
+      op = OPS[b1 & 15]
 
-      fin = intro & 1 > 0
-      extra[:rsv1] = intro & 2 > 0
-      extra[:rsv2] = intro & 4 > 0
-      extra[:rsv3] = intro & 8 > 0
-      op = OPS[intro >> 4 & 15]
-      masked = intro & 256 > 0
-      payload_len = intro >> 9 & 127
+      # MASKED, Payload len(7)
+      b2 = data[i, 1].unpack('C')[0]
+      i += 1
+      masked = b2 & 128 > 0
+      payload_len = b2 & 127
 
       if payload_len > 125
         if payload_len == 126
@@ -101,13 +104,15 @@ module LibWebSockets
     def to_s
       data, format = [], ''
 
-      intro = @fin ? 1 : 0
-      intro |= 2 if @rsv1
-      intro |= 4 if @rsv2
-      intro |= 8 if @rsv3
-      intro |= OPS.index(@op) << 4
-      intro |= 256 if @masking_key
-    
+      b1 = @fin ? 128 : 0
+      b1 |= 64 if @rsv1
+      b1 |= 32 if @rsv2
+      b1 |= 16 if @rsv3
+      b1 |= OPS.index @op
+      data << b1
+      format << 'C'
+
+      b2 = @masking_key ? 128 : 0    
       epl = nil
       if @payload
         payload_len = @payload.length
@@ -120,11 +125,11 @@ module LibWebSockets
           epl, payload_len = payload_len, 126
           epl_format = 'n'
         end
-        intro |= payload_len << 9
+        b2 |= payload_len
       end
 
-      data << intro
-      format << 'n'
+      data << b2
+      format << 'C'
 
       if epl
         data << epl

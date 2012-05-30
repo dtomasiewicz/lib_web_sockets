@@ -61,7 +61,7 @@ module LibWebSockets
         # REQUEST IS NOW CONSIDERED VALID
 
         @origin = req['Origin'].downcase
-        res = Response.new '101 Switching Protocols'
+        res = HTTP::Response.new '101 Switching Protocols'
         res['Upgrade'] = 'websocket'
         res['Connection'] = 'Upgrade'
         res['Sec-WebSocket-Version'] = res_version
@@ -71,7 +71,7 @@ module LibWebSockets
         open!
       rescue => e
         # required per section 4.2.1
-        send_data Response.new('400 Bad Request', e.message, err_headers).to_s
+        send_data HTTP::Response.new('400 Bad Request', e.message, err_headers).to_s
         raise e
       end
     end
