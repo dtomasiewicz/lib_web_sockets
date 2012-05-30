@@ -195,18 +195,18 @@ class FrameTest < MiniTest::Unit::TestCase
 
   def fw_test_to_s(expected, op, payload, fin, extra = {})
     payload_cpy = payload.dup
-    data = LibWebSockets::Frame.new(op, payload_cpy, fin, extra).to_s
-    assert_binary data
-    assert_equal expected, data
+    actual = LibWebSockets::Frame.new(op, payload_cpy, fin, extra).to_s
+    assert_binary actual
+    assert_equal expected, actual
     assert_equal payload, payload_cpy # ensure payload not modified
   end
 
-  def assert_binary(str, msg = nil)
-    assert_equal 'ASCII-8BIT', str.encoding.name, msg
-  end
-
+  BINARY_ENCODING = Encoding.find('ASCII-8BIT')
   def bin(str)
-    str.encoding.name == 'ASCII-8BIT' ? str : str.dup.force_encoding('ASCII-8BIT')
+    str.encoding == BINARY_ENCODING ? str : str.dup.force_encoding(BINARY_ENCODING)
+  end
+  def assert_binary(str, msg = nil)
+    assert_equal BINARY_ENCODING, str.encoding, msg
   end
 
 end

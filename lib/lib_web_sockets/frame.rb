@@ -5,6 +5,8 @@ module LibWebSockets
     class InvalidPayload < StandardError; end
     class InvalidFrameSize < StandardError; end
 
+    TEXT_ENCODING = Encoding.find 'UTF-8'
+    BINARY_ENCODING = Encoding.find 'ASCII-8BIT'
     MAX_UINT64 = 18446744073709551615
     MAX_UINT16 = 65535
 
@@ -31,29 +33,23 @@ module LibWebSockets
     alias_method :fin?, :fin
     alias_method :masked?, :masking_key
 
-    # payload should be a binary string, even if the op == :text
-    def initialize(op, payload = nil, fin = true, extra = {})
-      @op, @fin = op, fin
-      @payload = payload.dup if payload && !payload.frozen?
+    def initialize(op, payload = "", fin = true, extra = {})
+      @op, @payload, @fin = op, payload, fin
       @rsv1 = extra[:rsv1]
       @rsv2 = extra[:rsv2]
       @rsv3 = extra[:rsv3]
-      @masking_key = extra[:masking_key]
+      @masking_key = extra[:masking_key].dup if extra[:masking_key]
     end
 
     # parses an individual Frame as per section 5.2
-    # unpack codes:
-    #   n   uint16 network-endian
-    #   N   uint32 network-endian
-    #   Q>  uint64 big-endian (= network-endian)
-    #   An  n-byte binary string
     # returns Frame, remaining_data
     def self.parse(data)
+
       i = 0 # number of bytes read/parsed so far
       extra = {}
 
       # FIN, RSV1, RSV2, RSV3, opcode(4)
-      b1 = data[i, 1].unpack('C')[0]
+      b1 = byteslice(data, i, 1).unpack('C')[0]
       i += 1
       fin = b1 & 128 > 0
       extra[:rsv1] = b1 & 64 > 0
@@ -62,7 +58,7 @@ module LibWebSockets
       op = OPS[b1 & 15]
 
       # MASKED, Payload len(7)
-      b2 = data[i, 1].unpack('C')[0]
+      b2 = byteslice(data, i, 1).unpack('C')[0]
       i += 1
       masked = b2 & 128 > 0
       payload_len = b2 & 127
@@ -70,31 +66,31 @@ module LibWebSockets
       if payload_len > 125
         if payload_len == 126
           # 16-bit Extended payload len
-          payload_len = data[i, 2].unpack('n')[0]
+          payload_len = byteslice(data, i, 2).unpack('n')[0]
           i += 2
         else
           # 64-bit Extended payload len
-          payload_len = data[i, 8].unpack('Q>')[0]
+          payload_len = byteslice(data, i, 8).unpack('Q>')[0]
           i += 8
         end
       end
 
       if masked
-        extra[:masking_key] = data[i, 4].unpack('A4')[0]
+        extra[:masking_key] = byteslice(data, i, 4).unpack('A4')[0]
         i += 4
       end
 
-      payload = data[i, payload_len]
-      payload = mask payload, extra[:masking_key] if masked
+      payload = byteslice(data, i, payload_len)
+      mask! payload, extra[:masking_key] if masked
       i += payload_len
 
-      return new(op, payload, fin, extra), data[i..-1]
+      return new(op, payload, fin, extra), byteslice(data, i)
     end
 
     # parses the given chunk of data into one or more Frames
     def self.parse_all(data)
       frames = []
-      while data.length > 0
+      while data.bytesize > 0
         frame, data = parse data
         frames << frame
       end
@@ -114,19 +110,17 @@ module LibWebSockets
 
       b2 = @masking_key ? 128 : 0    
       epl = nil
-      if @payload
-        payload_len = @payload.length
-        if payload_len > MAX_UINT64
-          raise InvalidPayload, "#{@payload.length} (require 0..#{MAX_UINT64})"
-        elsif payload_len > MAX_UINT16
-          epl, payload_len = payload_len, 127
-          epl_format = 'Q>'
-        elsif payload_len > 125
-          epl, payload_len = payload_len, 126
-          epl_format = 'n'
-        end
-        b2 |= payload_len
+      payload_len = @payload.bytesize
+      if payload_len > MAX_UINT64
+        raise InvalidPayload, "#{payload.length} (require 0..#{MAX_UINT64})"
+      elsif payload_len > MAX_UINT16
+        epl, payload_len = payload_len, 127
+        epl_format = 'Q>'
+      elsif payload_len > 125
+        epl, payload_len = payload_len, 126
+        epl_format = 'n'
       end
+      b2 |= payload_len
 
       data << b2
       format << 'C'
@@ -141,9 +135,9 @@ module LibWebSockets
         format << 'A4'
       end
 
-      if @payload
+      if payload_len > 0
         data << (@masking_key ? self.class.mask(@payload, @masking_key) : @payload)
-        format << "A#{@payload.length}"
+        format << "A#{@payload.bytesize}"
       end
 
       data.pack format
@@ -159,14 +153,16 @@ module LibWebSockets
 
       framed = 0 # length of already framed portion
       frames = []
-      while framed < message.length
+
+      while framed < message.bytesize
         op = frames.length == 0 ? type : :continue
-        payload = message.length-framed > frame_size ?
-          message[framed, frame_size] :
-          message[framed..-1]
+        payload = message.bytesize-framed > frame_size ?
+          byteslice(message, framed, frame_size) :
+          byteslice(message, framed)
         framed += payload.length
-        frames << new(op, payload, message.length == framed)
+        frames << new(op, payload, message.bytesize == framed)
       end
+
       frames
     end
 
@@ -189,11 +185,50 @@ module LibWebSockets
     def ping?; op? :ping; end
     def pong?; op? :pong; end
 
+    # joins a list of message frames into the message's aggregate
+    # payload, and encodes the payload appropriately based on the
+    # type of the first frame.
+    def self.join(frames)
+      joined = "".force_encoding BINARY_ENCODING
+      frames.each do |frame|
+        as_binary(frame.payload) {|pl| joined << pl}
+      end
+      joined.force_encoding TEXT_ENCODING if frames.first.text?
+      joined
+    end
+
     private
+
+    def self.as_binary(string, &block)
+      if string.encoding == BINARY_ENCODING
+        yield string
+      elsif string.frozen?
+        yield string.dup.force_encoding BINARY_ENCODING
+      else
+        orig = string.encoding
+        string.force_encoding BINARY_ENCODING
+        yield string
+        string.force_encoding orig
+      end
+    end
+
+    # compensantes for 1.9.2's lack of String.byteslice
+    def self.byteslice(string, offset, length = nil)
+      if string.respond_to?(:byteslice)
+        string.byteslice offset, length
+      else
+        length ||= string.bytesize-offset
+        slice = nil
+        as_binary string do
+          slice = string[offset, length]
+        end
+        slice
+      end
+    end
 
     def self.mask!(data, key)
       (0...data.length).each do |i|
-        # must use getbyte/setbyte; [] and []= sometimes change the encoding
+        # must use setbyte; []= sometimes change the encoding
         data.setbyte i, data.getbyte(i) ^ key.getbyte(i%4)
       end
       data

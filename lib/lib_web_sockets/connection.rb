@@ -13,7 +13,6 @@ module LibWebSockets
     #     :closing to :closed after sequence received
     #   receive closing sequence:
     #     :open to :closed after return sequence sent
-    #     (effectively :open to :closed)
 
     # abstract opening_recv_data
 
@@ -26,15 +25,13 @@ module LibWebSockets
     class BadFrameOp < IOError; end
     class BadFrameSequence < IOError; end
 
-    TEXT_ENCODING = 'UTF-8'
-    BINARY_ENCODING = 'ASCII-8BIT'
-
     attr_reader :state
     attr_accessor :data_sender
 
     def initialize(&data_sender)
       @state = :opening
       @data_sender = data_sender
+      @pong_handlers = []
     end
 
     def self.wrap(socket, blocking = false, &on_message)
@@ -59,17 +56,16 @@ module LibWebSockets
       raise InvalidMessage, 'not a String' unless message.is_a? String
       raise NotOpen, to_s unless state? :open
 
-      if message.encoding.name == BINARY_ENCODING
-        type = :binary
-      else
-        type = :text
-        message = encode_text message # original encoding to TEXT_ENCODING
-        message = force_binary message # BINARY_ENCODING for slicing
-      end
+      op = message.encoding == Frame::BINARY_ENCODING ? :binary : :text
 
-      Frame.for_message(type, message).each do |frame|
+      Frame.for_message(op, message).each do |frame|
         send_data frame.to_s
       end
+    end
+
+    def ping(data = nil, &pong_handler)
+      @pong_handlers << pong_handler
+      send_data Frame.new(:ping, data).to_s
     end
 
     def close
@@ -106,52 +102,32 @@ module LibWebSockets
     protected
 
     def <<(data)
-      data = force_binary data
       Frame.parse_all(data).each do |frame|
         case frame.op
-        when :continue
-          raise BadFrameSequence, 'unexpected continuation frame' unless @message
-          @message << frame
-        when :text, :binary
-          @message = [frame]
+        when :continue, :text, :binary
+          if frame.continue?
+            raise BadFrameSequence, 'unexpected continuation frame' unless @message
+            @message << frame
+          else
+            @message = [frame]
+          end
+
+          if frame.fin?
+            message! Frame.join(@message)
+            @message = nil
+          end
         when :close
           send_close_frame if open?
           closed!
         when :ping
-          # TODO
+          send_data Frame.new(:pong, frame.payload).to_s
         when :pong
-          # TODO
+          if handler = @pong_handlers.shift
+            handler.call
+          end
         else
           raise BadFrameOp, "unsupported/unimplemented frame op: #{frame.op}"
         end
-
-        if @message && frame.fin?
-          msg = @message.map(&:payload).join
-          msg = force_text(msg) if @message.first.text?
-          message! msg
-          @message = nil
-        end
-      end
-    end
-
-    def force_text(data)
-      return data if data.encoding.name == TEXT_ENCODING
-      data = data.dup.force_encoding TEXT_ENCODING
-      raise InvalidData, "data is not valid #{TEXT_ENCODING}" unless data.valid_encoding?
-      return data
-    end
-
-    def force_binary(data)
-      return data if data.encoding.name == BINARY_ENCODING
-      data.dup.force_encoding BINARY_ENCODING
-    end
-
-    def encode_text(data)
-      return data if data.encoding.name == TEXT_ENCODING
-      begin
-        return data.encode TEXT_ENCODING
-      rescue Encoding::InvalidByteSequenceError
-        raise InvalidData, "data is not encodable as #{TEXT_ENCODING}"
       end
     end
 
