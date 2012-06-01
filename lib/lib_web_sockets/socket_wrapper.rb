@@ -20,9 +20,14 @@ module LibWebSockets
       @on_close = block
     end
 
-    def recv_data
+    # must override SimpleDelegator::send
+    def send(message)
+      @conn.send message
+    end
+
+    def recv
       begin
-        @conn.recv_data @socket.__send__(@blocking ? :recvmsg : :recvmsg_nonblock)[0]
+        @conn.recv @socket.__send__(@blocking ? :recvmsg : :recvmsg_nonblock)[0]
       rescue Connection::NoData
         close!
       end

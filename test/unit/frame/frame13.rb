@@ -1,14 +1,14 @@
 require 'lib_web_sockets'
 require 'minitest/autorun'
 
-# tests the frame structure described in section 5.2
+# tests the frame structure described in RFC 6455 section 5.2
 # TODO
 #   invalid frame parse tests
 #     - payload shorter than PL (at end of data)
 #       should raise an error
 #     - payload longer than PL
 #       should return remainder of length = difference (no error)
-class FrameTest < MiniTest::Unit::TestCase
+class Frame13Test < MiniTest::Unit::TestCase
 
   # VALID FRAME - no EPL, no mask
   #   1000000100000011
@@ -158,7 +158,7 @@ class FrameTest < MiniTest::Unit::TestCase
   # framework for test_parse_* tests
   def fw_test_parse(data, exps = {})
     data_cpy = data.dup
-    frame, remainder = LibWebSockets::Frame.parse data_cpy
+    frame, remainder = LibWebSockets::Frame::Frame13.parse data_cpy
 
     # invariants
     assert_equal data, data_cpy # call didn't modify the data
@@ -195,7 +195,7 @@ class FrameTest < MiniTest::Unit::TestCase
 
   def fw_test_to_s(expected, op, payload, fin, extra = {})
     payload_cpy = payload.dup
-    actual = LibWebSockets::Frame.new(op, payload_cpy, fin, extra).to_s
+    actual = LibWebSockets::Frame::Frame13.new(op, payload_cpy, fin, extra).to_s
     assert_binary actual
     assert_equal expected, actual
     assert_equal payload, payload_cpy # ensure payload not modified
