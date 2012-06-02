@@ -16,17 +16,17 @@ module LibWebSockets
       SocketWrapper.new socket, self, blocking, &on_message
     end
 
-    # Initialize a new Connection object. If a _data_sender_ block is given,
-    # it will be set as the new data sender (see Connection#data_sender=).
-    def initialize(&data_sender)
+    # Initialize a new Connection object. If a block is given, it will be set 
+    # as the new _on_raw_send_ handler (see Connection#on_raw_send=).
+    def initialize(&on_raw_send)
       @state = :connecting
-      @data_sender = data_sender
+      @on_raw_send = on_raw_send
     end
 
-    # Get/set the data sender. This proc will be called when raw (binary) data 
-    # is to be sent through the connection's I/O source. It is passed a single 
-    # argument-- the binary string to be sent.
-    attr_accessor :data_sender
+    # Get/set the raw data send handler. This proc will be called when raw 
+    # (binary) data is to be sent through the connection's I/O source. It is 
+    # passed a single argument-- the binary string to be sent.
+    attr_accessor :on_raw_send
 
     # Close the connection. If the particular implementation requires a closing
     # handshake, this method will initiate that handshake. If an _on_close_
@@ -131,30 +131,26 @@ module LibWebSockets
 
     private
 
-    def send_data(data)
-      if @data_sender
-        @data_sender.call data
-      else
-        raise NoDataSender, to_s
-      end
+    def raw_send!(data)
+      @on_raw_send.call data if @on_raw_send
     end
 
-    def open!
+    def open!(*args)
       @state = :open
-      @on_open.call if @on_open
+      @on_open.call *args if @on_open
     end
 
-    def closed!
+    def closed!(*args)
       @state = :closed
-      @on_close.call if @on_close
+      @on_close.call *args if @on_close
     end
 
-    def message_frame!(frame)
-      @on_message_frame.call frame if @on_message_frame
+    def message_frame!(*args)
+      @on_message_frame.call *args if @on_message_frame
     end
 
-    def message!(message)
-      @on_message.call message if @on_message
+    def message!(*args)
+      @on_message.call *args if @on_message
     end
 
   end

@@ -35,7 +35,7 @@ module LibWebSockets
         })
       end
 
-      send_data response.to_s
+      raw_send! response.to_s
       if version
         extend version
         handler_init init_data if respond_to? :handler_init

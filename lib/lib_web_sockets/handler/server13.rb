@@ -66,15 +66,27 @@ module LibWebSockets
       # unregistered (even if no new callback is supplied).
       def ping(data = "", &pong_callback)
         @pong_callback = pong_callback
-        send_data Frame.new(:ping, data).to_s
+        raw_send! Frame.new(:ping, data).to_s
       end
 
       # Close a Connection. This will only initiate the closing handshake; the 
       # _on_close_ handler will be invoked after the handshake is complete.
-      def close
+      def close(status = 1000, reason = nil)
         raise InvalidState, 'connection is not open' unless state? [:connecting, :open]
         @state = :closing
-        send_data Frame.new(:close).to_s
+        if status
+          data = [status]
+          format = 'n'
+          if reason
+            reason = reason.encode Frame::TEXT_ENCODING unless reason.encoding == Frame::TEXT_ENCODING
+            data << reason
+            format << "A#{reason.bytesize}"
+          end
+          payload = data.pack format
+        else
+          payload = ""
+        end
+        raw_send! Frame.new(:close, payload).to_s
       end
 
       def closing?; @state == :closing; end
@@ -106,10 +118,15 @@ module LibWebSockets
             end
           end
         when :close
-          send Frame.new(:close).to_s if open?
-          closed!
+          status = reason = nil
+          if frame.payload.length >= 2
+            status = frame.payload[0, 2].unpack 'n'
+            reason = frame.payload[2..-1].force_encoding Frame::TEXT_ENCODING
+          end
+          raw_send! Frame.new(:close, frame.payload).to_s if open?
+          closed! status, reason
         when :ping
-          send_data Frame.new(:ping, frame.payload).to_s
+          raw_send! Frame.new(:ping, frame.payload).to_s
         when :pong
           # must nullify @pong_callback BEFORE calling in case the handler
           # sends another ping

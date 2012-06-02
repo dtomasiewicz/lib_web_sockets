@@ -10,7 +10,7 @@ module LibWebSockets
 
     def initialize(socket, conn_class, blocking, &on_message)
       @socket = socket
-      @conn = conn_class.new &method(:data_sender)
+      @conn = conn_class.new &method(:raw_send)
       super(@conn)
       @conn.on_close &method(:close!)
       @conn.on_message &on_message
@@ -20,7 +20,7 @@ module LibWebSockets
       @on_close = block
     end
 
-    # must override SimpleDelegator::send
+    # must override SimpleDelegator#send
     def send(message)
       @conn.send message
     end
@@ -45,7 +45,7 @@ module LibWebSockets
       @on_close.call if @on_close
     end
 
-    def data_sender(data)
+    def raw_send(data)
       @socket.__send__ @blocking ? :sendmsg : :sendmsg_nonblock, data
     end
 
