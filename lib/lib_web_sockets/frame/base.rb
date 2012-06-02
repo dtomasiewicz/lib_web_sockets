@@ -42,10 +42,6 @@ module LibWebSockets
         raise "for_message not implemented for #{self.name}"
       end
 
-      def control?
-        raise "control? not implemented for #{self.name}"
-      end
-
       def op?(test)
         if test.kind_of? Array
           test.map(&:to_sym).include? @op

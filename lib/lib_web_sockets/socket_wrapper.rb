@@ -26,10 +26,11 @@ module LibWebSockets
     end
 
     def recv
-      begin
-        @conn.recv @socket.__send__(@blocking ? :recvmsg : :recvmsg_nonblock)[0]
-      rescue Connection::NoData
+      data = @socket.__send__(@blocking ? :recvmsg : :recvmsg_nonblock)[0]
+      if data.empty?
         close!
+      else
+        @conn.recv data
       end
     end
 

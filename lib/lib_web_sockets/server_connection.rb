@@ -5,39 +5,41 @@ module LibWebSockets
 
   class ServerConnection < Connection
 
-    # if multiple supported versions are suggested by the client, the one to appear
-    # first in this list is used
+    # If multiple supported versions are suggested by the client, the one to
+    # appear first in this list is used.
     VERSIONS = [Handler::Server13]
 
-    def handshake_recv(data)
+    # Process data received through the connection's I/O source.
+    def recv(data)
       response = HTTP::Response.new '101 Switching Protocols'
+      version = init_data = nil
 
       begin
         request = HTTP::Request.parse data
         if client_version = request['Sec-WebSocket-Version']
           client_versions = client_version.split(',').map &:strip
-          VERSIONS.each do |version|
-            if client_versions.include? version::NAME
-              self.handler = version.handshake self, request, response
+          VERSIONS.each do |v|
+            if client_versions.include? v::NAME
+              version = v
+              init_data = v.handshake request, response
               break
             end
           end
-
-          if self.handler
-            open!
-          else
-            raise Handler::InvalidHandshake, 'Version(s) not supported'
-          end
+          raise Handler::FailedHandshake, 'Version(s) not supported' unless version
         else
-          raise Handler::InvalidHandshake, '|Sec-WebSocket-Version| missing'
+          raise Handler::FailedHandshake, '|Sec-WebSocket-Version| missing'
         end
-      rescue HTTP::Message::Malformed, Handler::InvalidHandshake => e
+      rescue HTTP::Message::Malformed, Handler::FailedHandshake => e
         response = HTTP::Response.new('400 Bad Request', e.message, {
           'Sec-WebSocket-Version' => self.class::VERSIONS.map{|v| v::NAME}.join(',')
         })
       end
 
       send_data response.to_s
+      if version
+        extend version
+        handler_init init_data if respond_to? :handler_init
+      end
     end
 
   end

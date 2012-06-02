@@ -167,14 +167,20 @@ module LibWebSockets
         frames
       end
 
-      def control?
-        OPS.index(@op) > 0x7
+      def op?(test)
+        if test.respond_to? :include?
+          test.map(&:to_sym).include? @op
+        else
+          @op == test.to_sym
+        end
       end
+      
+      def continue?; @op == :continue; end
+      def close?; @op == :close; end
+      def ping?; @op == :ping; end
+      def pong?; @op == :pong; end
 
-      def continue?; op? :continue; end
-      def close?; op? :close; end
-      def ping?; op? :ping; end
-      def pong?; op? :pong; end
+      private
 
       def self.mask!(data, key)
         (0...data.length).each do |i|

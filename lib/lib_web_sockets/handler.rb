@@ -2,7 +2,7 @@ module LibWebSockets
 
   module Handler
 
-    class InvalidHandshake < StandardError; end
+    class FailedHandshake < StandardError; end
     class BadFrameOp < IOError; end
     class BadFrameSequence < IOError; end
 
@@ -10,5 +10,5 @@ module LibWebSockets
 
 end
 
-require 'lib_web_sockets/handler/base'
+require 'lib_web_sockets/handler/basic_send_recv'
 require 'lib_web_sockets/handler/server13'
