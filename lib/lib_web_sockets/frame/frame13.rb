@@ -4,22 +4,22 @@ module LibWebSockets
     class Frame13 < Base
 
       OPS = [
-        :continue, # 0x0
-        :text,     # 0x1
-        :binary,   # 0x2
-        :rsv_nc_1, # 0x3
-        :rsv_nc_2, # 0x4
-        :rsv_nc_3, # 0x5
-        :rsv_nc_4, # 0x6
-        :rsv_nc_5, # 0x7
-        :close,    # 0x8
-        :ping,     # 0x9
-        :pong,     # 0xA
-        :rsv_c_1,  # 0xB
-        :rsv_c_2,  # 0xC
-        :rsv_c_3,  # 0xD
-        :rsv_c_4,  # 0xE
-        :rsv_c_5,  # 0xF
+        :continuation, # 0x0
+        :text,         # 0x1
+        :binary,       # 0x2
+        :rsv_nc_1,     # 0x3
+        :rsv_nc_2,     # 0x4
+        :rsv_nc_3,     # 0x5
+        :rsv_nc_4,     # 0x6
+        :rsv_nc_5,     # 0x7
+        :close,        # 0x8
+        :ping,         # 0x9
+        :pong,         # 0xA
+        :rsv_c_1,      # 0xB
+        :rsv_c_2,      # 0xC
+        :rsv_c_3,      # 0xD
+        :rsv_c_4,      # 0xE
+        :rsv_c_5,      # 0xF
       ]
 
       MAX_UINT64 = 18446744073709551615
@@ -156,7 +156,7 @@ module LibWebSockets
         frames = []
 
         while framed < message.bytesize
-          op = frames.length == 0 ? type : :continue
+          op = frames.length == 0 ? type : :continuation
           payload = message.bytesize-framed > frame_size ?
             byteslice(message, framed, frame_size) :
             byteslice(message, framed)
@@ -175,7 +175,7 @@ module LibWebSockets
         end
       end
       
-      def continue?; @op == :continue; end
+      def continuation?; @op == :continuation; end
       def close?; @op == :close; end
       def ping?; @op == :ping; end
       def pong?; @op == :pong; end

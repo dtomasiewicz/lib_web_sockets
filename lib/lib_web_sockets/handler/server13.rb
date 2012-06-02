@@ -89,11 +89,11 @@ module LibWebSockets
       # required for BasicSendRecv
       def recv_frame(frame)
         case frame.op
-        when :continue, :text, :binary
+        when :continuation, :text, :binary
           message_frame! frame
 
           if buffer_message?
-            if frame.continue?
+            if frame.continuation?
               raise BadFrameSequence, 'unexpected continuation frame' unless @message
               @message << frame
             else

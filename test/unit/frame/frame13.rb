@@ -84,7 +84,7 @@ class Frame13Test < MiniTest::Unit::TestCase
   #
   #   FIN = 0
   #   RSV 123 = 101
-  #   OPCODE = 0000 (continue)
+  #   OPCODE = 0000 (continuation)
   #   MASK = 0
   #   PAYLOAD LEN = 1111110 (126)
   # 
@@ -98,14 +98,14 @@ class Frame13Test < MiniTest::Unit::TestCase
     fw_test_parse v_epl16_nomask,
       :fin? => false,
       :rsv => [true, false, true],
-      :op => :continue,
+      :op => :continuation,
       :masking_key => nil,
       :payload => bin("ABC")*14011
   end
 
   def test_to_s_v_epl16_nomask
     fw_test_to_s v_epl16_nomask,
-      :continue,
+      :continuation,
       bin("ABC")*14011,
       false,
       :rsv1 => true,
