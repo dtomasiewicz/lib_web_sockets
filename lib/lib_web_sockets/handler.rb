@@ -10,5 +10,4 @@ module LibWebSockets
 
 end
 
-require 'lib_web_sockets/handler/basic_send_recv'
 require 'lib_web_sockets/handler/server13'

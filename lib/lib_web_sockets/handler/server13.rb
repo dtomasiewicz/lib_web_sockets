@@ -3,8 +3,6 @@ module LibWebSockets
 
     # implements the WebSockets protocol as described in RFC 6455
     module Server13
-
-      include BasicSendRecv
       
       NAME = '13'
       ACCEPT_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -57,6 +55,13 @@ module LibWebSockets
         open!
       end
 
+      # Process (binary) data that is received through the I/O source.
+      def recv_data(data)
+        Frame.parse_all(data).each do |frame|
+          recv_frame frame
+        end
+      end
+
       # Ping the remote host, invoking the (optional) _pong_callback_ when a Pong
       # response is received. A _payload_ string may be supplied, but it will be 
       # sent as-is (NOT encoded to UTF-8) regardless of its encoding.
@@ -66,7 +71,7 @@ module LibWebSockets
       # unregistered (even if no new callback is supplied).
       def ping(data = "", &pong_callback)
         @pong_callback = pong_callback
-        raw_send! Frame.new(:ping, data).to_s
+        send_data Frame.new(:ping, data).to_s
       end
 
       # Close a Connection. This will only initiate the closing handshake; the 
@@ -86,19 +91,24 @@ module LibWebSockets
         else
           payload = ""
         end
-        raw_send! Frame.new(:close, payload).to_s
+        send_data Frame.new(:close, payload).to_s
       end
 
       def closing?; @state == :closing; end
 
-      private
+      # Send a WebSocket message. The message type will be determined by the
+      # encoding of the _message_ string. The registered on_raw_send block will
+      # be invoked to send the raw message data.
+      def send(message)
+        raise LibWebSockets::Connection::InvalidMessage, 'not a String' unless message.kind_of? String
+        raise LibWebSockets::Connection::InvalidState, to_s unless open?
 
-      # required for BasicSendRecv
-      def frame_class
-        Frame
+        Frame.for_message(message).each do |frame|
+          send_data frame.to_s
+        end
       end
 
-      # required for BasicSendRecv
+      # Process a frame that is received through the I/O source.
       def recv_frame(frame)
         case frame.op
         when :continuation, :text, :binary
@@ -122,11 +132,14 @@ module LibWebSockets
           if frame.payload.length >= 2
             status = frame.payload[0, 2].unpack 'n'
             reason = frame.payload[2..-1].force_encoding Frame::TEXT_ENCODING
+            unless reason.valid_encoding?
+              raise LibWebSockets::Connection::Failed, 'invalid encoding in close reason'
+            end
           end
-          raw_send! Frame.new(:close, frame.payload).to_s if open?
+          send_data Frame.new(:close, frame.payload).to_s if open?
           closed! status, reason
         when :ping
-          raw_send! Frame.new(:ping, frame.payload).to_s
+          send_data Frame.new(:ping, frame.payload).to_s
         when :pong
           # must nullify @pong_callback BEFORE calling in case the handler
           # sends another ping

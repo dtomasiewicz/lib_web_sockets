@@ -61,6 +61,9 @@ module LibWebSockets
           as_binary(frame.payload) {|pl| joined << pl}
         end
         joined.force_encoding self::TEXT_ENCODING if frames.first.text?
+        unless joined.valid_encoding?
+          raise LibWebSockets::Connection::Failed, 'invalid encoding in received message'
+        end
         joined
       end
 

@@ -9,8 +9,10 @@ module LibWebSockets
     # appear first in this list is used.
     VERSIONS = [Handler::Server13]
 
+    private
+    
     # Process data received through the connection's I/O source.
-    def recv(data)
+    def recv_data(data)
       response = HTTP::Response.new '101 Switching Protocols'
       version = init_data = nil
 
@@ -35,7 +37,7 @@ module LibWebSockets
         })
       end
 
-      raw_send! response.to_s
+      send_data response.to_s
       if version
         extend version
         handler_init init_data if respond_to? :handler_init

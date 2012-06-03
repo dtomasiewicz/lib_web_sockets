@@ -6,34 +6,31 @@ module LibWebSockets
     class InvalidState < IOError; end
     class InvalidMessage < IOError; end
     class InvalidData < IOError; end
+    class Failed < IOError; end
 
-    # Wraps a raw Socket object in a SocketWrapper, which exposes a similar
-    # interface to Connection but uses the Socket object for I/O. If blocking
-    # is a false value (default), the *_nonblock versions of socket methods
-    # will be used. If a block is passed, it will be registered as the
-    # on_message handler (see Connection#on_message).
-    def self.wrap(socket, blocking = false, &on_message)
-      SocketWrapper.new socket, self, blocking, &on_message
-    end
+    attr_reader :socket
+    alias_method :to_io, :socket
+    attr_accessor :blocking
 
-    # Initialize a new Connection object. If a block is given, it will be set 
-    # as the new _on_raw_send_ handler (see Connection#on_raw_send=).
-    def initialize(&on_raw_send)
+    # Initialize a new Connection object. If blocking is a false value 
+    # (default), the *_nonblock versions of socket methods will be used.
+    # If a block is passed, it will be registered as the on_message handler
+    # (see Connection#on_message=).
+    def initialize(socket, blocking = false, &on_message)
+      @socket = socket
+      @blocking = blocking
+      @on_message = on_message
       @state = :connecting
-      @on_raw_send = on_raw_send
     end
 
-    # Get/set the raw data send handler. This proc will be called when raw 
-    # (binary) data is to be sent through the connection's I/O source. It is 
-    # passed a single argument-- the binary string to be sent.
-    attr_accessor :on_raw_send
-
-    # Close the connection. If the particular implementation requires a closing
-    # handshake, this method will initiate that handshake. If an _on_close_
-    # handler is registered, it will be called only once the connection has 
-    # been fully closed.
-    def close
-      closed!
+    def recv
+      begin
+        data = @socket.__send__(@blocking ? :recvmsg : :recvmsg_nonblock)[0]
+        raise Failed, 'no data on socket' if data.bytesize == 0
+        recv_data data
+      rescue Failed
+        closed!
+      end
     end
 
     # Getter for the _on_open_ handler. If a block is supplied, it will be set
@@ -131,8 +128,8 @@ module LibWebSockets
 
     private
 
-    def raw_send!(data)
-      @on_raw_send.call data if @on_raw_send
+    def send_data(data)
+      @socket.__send__ @blocking ? :sendmsg : :sendmsg_nonblock, data
     end
 
     def open!(*args)
@@ -141,6 +138,7 @@ module LibWebSockets
     end
 
     def closed!(*args)
+      @socket.close
       @state = :closed
       @on_close.call *args if @on_close
     end
