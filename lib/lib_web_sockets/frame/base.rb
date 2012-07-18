@@ -84,10 +84,10 @@ module LibWebSockets
 
       # compensantes for 1.9.2's lack of String.byteslice
       def self.byteslice(string, offset, length = nil)
+        length ||= string.bytesize-offset
         if string.respond_to?(:byteslice)
           string.byteslice offset, length
         else
-          length ||= string.bytesize-offset
           slice = nil
           as_binary string do
             slice = string[offset, length]
