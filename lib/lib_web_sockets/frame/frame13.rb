@@ -70,7 +70,7 @@ module LibWebSockets
         end
 
         if masked
-          extra[:masking_key] = byteslice(data, i, 4).unpack('A4')[0]
+          extra[:masking_key] = byteslice(data, i, 4).unpack('a4')[0]
           i += 4
         end
 
@@ -116,7 +116,7 @@ module LibWebSockets
 
         if @masking_key
           data << @masking_key
-          format << 'A4'
+          format << 'a4'
         end
 
         if payload_len > 0
